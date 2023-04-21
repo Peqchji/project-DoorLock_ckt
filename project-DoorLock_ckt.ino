@@ -1,7 +1,12 @@
 #include <ESP8266WiFi.h>
-#include "src/IR_node_task.cpp"
+#include <Arduino.h>
+#include <Scheduler.h>
+#include <Task.h>
+#include <LeanTask.h>
+
 // Define Input port of esp8266 that connect to Signal port of mux
 #define D0 16
+
 
 // Define signal send port from esp8266 to mux 
 #define S0 5
@@ -24,7 +29,10 @@ enum solenoid_state {
 
 unsigned int active_timer = 0;
 
-int IR_pad_state = SLEEP;
+int IR_pad_state = pad_state::SLEEP;
+int solenoid_status = solenoid_state::LOCK;
+int outdoor_status = LOW;
+int lock_button_status = LOW
 
 unsigned int solenoid_timer = 0;
 
@@ -54,7 +62,54 @@ int selectChannel(int i){
   return 0;
 }
 
-IRNode_Task ir_task[10];
+class IRNode_Task : public LeanTask {
+    private:
+        int current_status;
+        bool is_active;
+        int node_num;
+        int (*sel_func)(int);
+        unsigned int task_timer = 0;
+        
+    public:
+        IRNode_Task() { }
+        
+        int init(int num, int (*sel_func_args)(int)) {
+            this->node_num = num;
+            this->is_active = false;
+            this->current_status = LOW;
+            this->sel_func = sel_func_args;
+            return 0;
+        }
+        
+        void reset_props(){
+            this->is_active = false;
+            this->current_status = LOW;
+        }
+        
+        bool get_is_active();
+        int get_current_status();
+        
+    protected:
+        void setup() {}
+        
+        void loop() {
+            if(this->is_active){
+                return;
+            }
+            sel_func(node_num);                       
+            this->current_status = digitalRead(D0);
+            if(this->current_status == HIGH && !this->is_active){
+                this->is_active = true;
+            }
+            
+        }
+} ir_task[10];
+
+void reset_IRNode_props(){
+  for(int i =0; i < 10; i++){
+    ir_task[i].reset_props();
+  }
+}
 
 void setup(void){
     WiFi.forceSleepBegin();
@@ -96,12 +151,12 @@ void loop(void)
   }
   
   if(outdoor_status == HIGH && IR_pad_state == SLEEP){
-    IR_pad_state = ACTIVE;
+    IR_pad_state = pad_state::ACTIVE;
     active_timer = millis();
   }
   
   if(outdoor_status == LOW && timer - active_timer > 30*1000){
-    IR_pad_state = SLEEP;
+    IR_pad_state = pad_state::SLEEP;
     for(int idx = 0; idx < password_lenght; idx++){ //reset input
       input_password[idx] = 0;
     }
@@ -110,20 +165,21 @@ void loop(void)
   
   ////////////////////////////////////////////////////////
   
-  if(IR_pad_state == SLEEP) {
+  if(IR_pad_state == pad_state::SLEEP) {
     return;
   }
   
   ////////////////////////////////////////////////////////
   
-  if(outdoor_status == HIGH && IR_pad_state == ACTIVE 
-    && is_correct(input_password) && solenoid_status == LOCK){
-      digitalWrite(solenoid_pin, UNLOCK);
+  if(outdoor_status == HIGH && IR_pad_state == pad_state::ACTIVE 
+    && is_correct(input_password) && solenoid_status == solenoid_state::LOCK){
+      digitalWrite(solenoid_pin, solenoid_state::UNLOCK);
       solenoid_timer = millis();
     }
   
   if(solenoid_status == UNLOCK && timer - solenoid_timer > 30*1000){
-    digitalWrite(solenoid_pin, LOCK);
+    reset_IRNode_props();
+    digitalWrite(solenoid_pin, solenoid_state::LOCK);
   }
   
   

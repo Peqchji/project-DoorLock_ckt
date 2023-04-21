@@ -3,6 +3,9 @@
 #include <Task.h>
 #include <LeanTask.h>
 
+// Define Input port of esp8266 that connect to Signal port of mux
+#define D0 16
+
 
 class IRNode_Task : public LeanTask {
     private:
@@ -27,6 +30,9 @@ class IRNode_Task : public LeanTask {
             this->is_active = false;
             this->current_status = LOW;
         }
+        
+        bool get_is_active();
+        int get_current_status();
         
     protected:
         void setup() {}
