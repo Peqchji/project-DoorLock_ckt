@@ -30,18 +30,18 @@ int correct_password[password_lenght] = {1, 2, 3, 4};
 int input_password[password_lenght] = {0, 0, 0, 0};
 int current_digit = 0;
 
-byte channel[11][4] = {
-  {0, 0, 0, 0},  //  chnl0 -> ---
-  {1, 0, 0, 0},  //  chnl1 -> num1
-  {0, 1, 0, 0},  //  chnl2 -> num2
-  {1, 1, 0, 0},  //  chnl3 -> num3
-  {0, 0, 1, 0},  //  chnl4 -> num4
-  {1, 0, 1, 0},  //  chnl5 -> num5
-  {0, 1, 1, 0},  //  chnl6 -> num6
-  {1, 1, 1, 0},  //  chnl7 -> num7
-  {0, 0, 0, 1},  //  chnl8 -> num8
-  {1, 0, 0, 1},  //  chnl9 -> num9
-  {0, 1, 0, 1}   //  chnl10 -> sensor
+byte channel[11] = {
+  0,  //  chnl0 -> ---
+  1,  //  chnl1 -> num1
+  2,  //  chnl2 -> num2
+  3,  //  chnl3 -> num3
+  4,  //  chnl4 -> num4
+  5,  //  chnl5 -> num5
+  6,  //  chnl6 -> num6
+  7,  //  chnl7 -> num7
+  8,  //  chnl8 -> num8
+  9,  //  chnl9 -> num9
+  10   //  chnl10 -> sensor
 };
 
 int is_correct(int input[4])
@@ -57,10 +57,10 @@ int is_correct(int input[4])
 
 
 int selectChannel(int i){
-  digitalWrite(S0, channel[i][0]);
-  digitalWrite(S1, channel[i][1]);
-  digitalWrite(S2, channel[i][2]);
-  digitalWrite(S3, channel[i][3]);
+  digitalWrite(S0, channel[i] >> 3);
+  digitalWrite(S1, channel[i] >> 2);
+  digitalWrite(S2, channel[i] >> 1);
+  digitalWrite(S3, channel[i] >> 0);
   return 0;
 }
 
