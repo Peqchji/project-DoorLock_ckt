@@ -8,6 +8,7 @@
 #define S1 4
 #define S2 0
 #define S3 2
+#define solenoid_pin 13
 
 #define password_lenght 4
 
@@ -18,49 +19,38 @@ enum pad_state {
   SLEEP, ACTIVE 
 };
 enum solenoid_state {
-  LOCK, UNLOCK
+  LOCK = LOW, UNLOCK = HIGH
 };
 
 unsigned int active_timer = 0;
 
-int IR_pad_state = LOW;
-int outdoor_status = LOW;
+int IR_pad_state = SLEEP;
+
+unsigned int solenoid_timer = 0;
 
 int correct_password[password_lenght] = {1, 2, 3, 4};
 int input_password[password_lenght] = {0, 0, 0, 0};
 int current_digit = 0;
-
-byte channel[11][4] = {
-  {0, 0, 0, 0},  //  chnl0 -> ---
-  {1, 0, 0, 0},  //  chnl1 -> num1
-  {0, 1, 0, 0},  //  chnl2 -> num2
-  {1, 1, 0, 0},  //  chnl3 -> num3
-  {0, 0, 1, 0},  //  chnl4 -> num4
-  {1, 0, 1, 0},  //  chnl5 -> num5
-  {0, 1, 1, 0},  //  chnl6 -> num6
-  {1, 1, 1, 0},  //  chnl7 -> num7
-  {0, 0, 0, 1},  //  chnl8 -> num8
-  {1, 0, 0, 1},  //  chnl9 -> num9
-  {0, 1, 0, 1}   //  chnl10 -> sensor
-};
 
 int is_correct(int input[4])
 {
   int i = 0;
   while (i < 4)
   {
-    if (correct_password[i] != input_password[i])
+    if (correct_password[i] != input_password[i]){
       return (0);
+    }
   }
   return (1);
 }
 
 
 int selectChannel(int i){
-  digitalWrite(S0, channel[i][0]);
-  digitalWrite(S1, channel[i][1]);
-  digitalWrite(S2, channel[i][2]);
-  digitalWrite(S3, channel[i][3]);
+  uint8_t channel = static_cast<uint8_t>(i) ^ 0b11111111;
+  digitalWrite(S0, channel & 0b00000001);
+  digitalWrite(S1, channel & 0b00000010);
+  digitalWrite(S2, channel & 0b00000100);
+  digitalWrite(S3, channel & 0b00001000);
   return 0;
 }
 
@@ -70,12 +60,13 @@ void setup(void){
     WiFi.forceSleepBegin();
     Serial.begin(9600);
     
-    pinMode(D0, INPUT);
     pinMode(S0, OUTPUT);
     pinMode(S1, OUTPUT);
     pinMode(S2, OUTPUT);
     pinMode(S3, OUTPUT);
+    pinMode(solenoid_pin, OUTPUT);
 
+    pinMode(D0, INPUT);
     pinMode(outdoor_button, INPUT);
     pinMode(lock_button, INPUT);
 
@@ -83,6 +74,7 @@ void setup(void){
     digitalWrite(S1, LOW);
     digitalWrite(S2, LOW);
     digitalWrite(S3, LOW);
+    digitalWrite(solenoid_pin, LOW);
     
     for(int num = 0; num < 10; num++){ //create IR handler task
       ir_task[num].init(num, &selectChannel);
@@ -94,8 +86,15 @@ void setup(void){
 void loop(void)
 {
   unsigned int timer = millis();
-
-  outdoor_status = digitalRead(outdoor_button);
+  
+  int solenoid_status = digitalRead(solenoid_pin);
+  int outdoor_status = digitalRead(outdoor_button); //อย่าลืม debrouce
+  int lock_button_status = digitalRead(lock_button); //อย่าลืม debrouce
+  
+  if(lock_button_status == HIGH){
+    digitalWrite(solenoid_pin, !solenoid_status);
+  }
+  
   if(outdoor_status == HIGH && IR_pad_state == SLEEP){
     IR_pad_state = ACTIVE;
     active_timer = millis();
@@ -117,7 +116,15 @@ void loop(void)
   
   ////////////////////////////////////////////////////////
   
-  if(outdoor_status == HIGH && IR_pad_state == ACTIVE){
-    is_correct(input_password);
+  if(outdoor_status == HIGH && IR_pad_state == ACTIVE 
+    && is_correct(input_password) && solenoid_status == LOCK){
+      digitalWrite(solenoid_pin, UNLOCK);
+      solenoid_timer = millis();
+    }
+  
+  if(solenoid_status == UNLOCK && timer - solenoid_timer > 30*1000){
+    digitalWrite(solenoid_pin, LOCK);
   }
+  
+  
 }
