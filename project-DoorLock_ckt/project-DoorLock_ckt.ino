@@ -52,14 +52,12 @@ int is_correct(int input[4])
   return (1);
 }
 
-
-int selectChannel(int i){
+void selectChannel(int i){
   uint8_t channel = static_cast<uint8_t>(i) ^ 0b11111111;
   digitalWrite(S0, channel & 0b00000001);
   digitalWrite(S1, channel & 0b00000010);
   digitalWrite(S2, channel & 0b00000100);
   digitalWrite(S3, channel & 0b00001000);
-  return 0;
 }
 
 class IRNode_Task : public LeanTask {
@@ -131,7 +129,8 @@ void setup(void){
     digitalWrite(S3, LOW);
     digitalWrite(solenoid_pin, LOW);
     
-    for(int num = 0; num < 10; num++){ //create IR handler task
+    for(int num = 0; num < 10; num++)  //create IR handler task
+    {
       ir_task[num].init(num, &selectChannel);
       Scheduler.start(&ir_task[num]);
     }
