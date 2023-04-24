@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 
 // Define Input port of esp8266 that connect to Signal port of mux
 #define D0 16
@@ -7,6 +9,26 @@
 #define S1 3
 #define S2 3
 #define S3 4
+
+#define submit_button 14
+#define lock_button 12
+#define solenoid_pin 13
+#define pass_len 4
+
+char correct_password[pass_len] = {1, 2, 3, 4};
+
+unsigned long debounceDelay = 50;
+
+// Submit Button Handling
+int submitButtonState;
+int submitLastButtonState = LOW; 
+unsigned long submitLastDebounceTime = 0;
+
+// Lock button Handling
+int lock_state = HIGH;
+int lockButtonState;
+int lockLastButtonState = HIGH; 
+unsigned long lockLastDebounceTime = 0;
 
 void    setup(void)
 {
@@ -22,35 +44,17 @@ void    setup(void)
     digitalWrite(S3, LOW);
 }
 
-byte channel[11][4] = {
-  {0,0,0,0},  //  chnl0 -> ---
-  {1,0,0,0},  //  chnl1 -> num1
-  {0,1,0,0},  //  chnl2 -> num2
-  {1,1,0,0},  //  chnl3 -> num3
-  {0,0,1,0},  //  chnl4 -> num4
-  {1,0,1,0},  //  chnl5 -> num5
-  {0,1,1,0},  //  chnl6 -> num6
-  {1,1,1,0},  //  chnl7 -> num7
-  {0,0,0,1},  //  chnl8 -> num8
-  {1,0,0,1},  //  chnl9 -> num9
-  {0,1,0,1}   //  chnl10 -> sensor
-  }
-
 void selectChannel(int i){
-  digitalWrite(S0, channel[i][0]);
-  digitalWrite(S1, channel[i][1]);
-  digitalWrite(S2, channel[i][2]);
-  digitalWrite(S3, channel[i][3]);
+  digitalWrite(S0,  (i >> 3) & 1);
+  digitalWrite(S1,  (i >> 2) & 1);
+  digitalWrite(S2,  (i >> 1) & 1);
+  digitalWrite(S3,  (i >> 0) & 1);
 }
 
-
-int correct_password[4] = {1, 2, 3, 4};
-int input_password[4] = {0, 0, 0, 0};
-
-int is_correct(int input[4])
+int is_correct(int input[pass_len])
 {
   int i = 0;
-  while (i < 4)
+  while (i < pass_len)
   {
     if (correct_password[i] != input_password[j])
       return (0)
@@ -58,32 +62,100 @@ int is_correct(int input[4])
   return (1)
 }
 
+int  is_submit_button_press()
+{
+  int ret = 0;
+  int reading = digitalRead(submit_button);
+  if (reading != submitButtonState) 
+    submitLastDebounceTime = millis();
 
+  if ((millis() - submitLastDebounceTime) > debounceDelay) {
+    if (reading != submitButtonState) 
+    {
+      submitButtonState = reading;
+      if (buttonState == HIGH) 
+      {
+        j = 0;
+        ret = ~ret
+      }
+    }
+  }
+  submitLastButtonState = reading;
+  return (ret)
+}
+
+void  inside_button_handling()
+{
+  int reading = digitalRead(lock_button);
+  if (reading != lockButtonState) 
+    lockLastDebounceTime = millis();
+
+  if ((millis() - lockLastDebounceTime) > debounceDelay) {
+    if (reading != lockButtonState) 
+    {
+      lockButtonState = reading;
+      if (lockBttonState == HIGH)
+        lock_state = ~lock_state;     
+    }
+  }
+  lockLastButtonState = reading;
+}
+
+void  applyLockState()
+{
+  digitalWrite(solenoid_pin, lock_state);
+}
+
+int isOpen()
+{
+  selectChannel(10);
+  return (digitalRead(D0))
+}
+
+int j = 0;
 
 void    loop(void)
 {
+    char buffer[pass_len] = {0, 0, 0, 0};
+    int is_open = isOpen(); //i don't know 0,1 of the sensor is true or false >> please correct this
+
     int i = 1;
-    int recieve_signal;
 
-    int is_open = 0; //i don't know 0,1 of the sensor is true or false >> please correct this
-
-    int j = 0;
-    selectChannel(10);
-    is_open = digitalRead(D0);
+  // these loop are like a task to check all IR and fill recive value to buffer
     while (!is_open && i < 10)
     {
         selectChannel(i);
-        if(digitalRead(D0));
+        if(!digitalRead(D0)); // have '!' bacause it's PULL UP 
         {
-          input_password[j] = i - 1;
-          j++
+          buffer[j] = i;
+          j++;
         }
       i++;
     }
 
-    if (is_correct(input_password))
-      // door open
-    else:
-      serial.println("Password is NOT correct");
- 
+    // then will check if user submit the input and if it's correct -> unlock 
+    if (is_submit_button_press())
+    {
+      if (is_correct(buffer))
+      {
+        int init_time_open = millis();
+        digitalWrite(solenoid_pin, HIGH); // open solenoid >> unlock
+        lock_state = HIGH; // unlock
+      }
+      else
+      {
+        Serial.println("Password is not Correct");
+      }
+      bzero(buffer); // reset buffer to make all buffer contain 0
+    }
+
+    // if the door is open and it's open more than 10s --> lock it
+    if (is_open && millis() - init_time_open > 10000)
+    {
+      digitalWrite(solenoid_pin, LOW); // close solenoid >> lock
+      lock_state = LOW; // lock
+    }
+
+    inside_button_handling(); // set lock_state 
+    applyLockState(); // apply lock_state to physical lock
 }

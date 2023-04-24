@@ -13,7 +13,7 @@
 #define S1 4
 #define S2 0
 #define S3 2
-#define solenoid_pin 13
+i
 
 #define password_lenght 4
 
