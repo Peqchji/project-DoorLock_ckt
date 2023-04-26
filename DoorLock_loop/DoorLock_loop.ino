@@ -19,7 +19,7 @@ int j = 0;
 char correct_password[pass_len + 1] = {'1', '2', '3', '4' , 0};
 
 unsigned long debounceDelay = 50;
-  unsigned long init_time_open = 0;
+unsigned long init_time_unlock = 0;
 
 // Submit Button Handling
 int submitButtonState ;
@@ -69,7 +69,7 @@ int  is_submit_button_press()
       submitButtonState = reading;
       if (submitButtonState == LOW) 
       {
-        // j = 0;
+        j = 0;
         ret = ~ret;
       }
     }
@@ -88,8 +88,17 @@ void  inside_button_handling()
     if (reading != lockButtonState) 
     {
       lockButtonState = reading;
-      if (lockButtonState == HIGH)
-        lock_state = ~lock_state;     
+      if (lockButtonState == LOW)
+      {
+        if (lock_state == LOW)
+          lock_state = HIGH;
+        else
+        {
+          lock_state = LOW;
+          init_time_unlock = millis();    
+        }
+        Serial.println("Hello from inside");
+      }
     }
   }
   lockLastButtonState = reading;
@@ -128,10 +137,10 @@ int lastState[9] = {LOW, LOW, LOW, LOW, LOW, LOW, LOW, LOW, LOW};
 void    loop(void)
 {
     // int is_open = isOpen(); //i don't know 0,1 of the sensor is true or false >> please correct this
-    int is_open = 0;
+    int is_open = 0; // << ***********
 
   // these loop are like a task to check all IR and fill recive value to buffer
-  if (millis() - timer > 100)
+  if ( /* !is_open */ && millis() - timer > 100)
   {
     timer = millis();
     selectChannel(counter);
@@ -164,15 +173,14 @@ void    loop(void)
   }
     
 
-    // then will check if user submit the input and if it's correct -> unlock 
-
+  // then will check if user submit the input and if it's correct -> unlock 
   if (is_submit_button_press())
   {
     Serial.println("SUBMIT IS PRESSED");
     if (is_correct(buffer))
     {
       Serial.println("Password is Correct, The door is open");
-      init_time_open = millis();
+      init_time_unlock = millis();
       digitalWrite(solenoid_pin, HIGH); // open solenoid >> unlock
       lock_state = LOW; // unlock
     }
@@ -181,14 +189,13 @@ void    loop(void)
       Serial.println("Password is not Correct");
     }
     bzero(buffer, pass_len);  // reset buffer to make all buffer contain 0
-    j = 0;
   }
-    // if the door is open and it's open more than 10s --> lock it
-  if (/*is_open && */ lock_state == LOW && millis() - init_time_open > 10000)
+    // if the door is not open (close) and it's unlock more than 10s --> lock it
+  if (/* !is_open && */lock_state == LOW && millis() - init_time_unlock > 10000)
   {
     digitalWrite(solenoid_pin, LOW); // close solenoid >> lock
     lock_state = HIGH; // lock
   }
-  // inside_button_handling(); // set lock_state 
-  // applyLockState(); // apply lock_state to physical lock
+  inside_button_handling(); // set lock_state 
+  applyLockState(); // apply lock_state to solenoid lock                                    <<<<< **** need test *****
 }
